@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.webbrar.wurm.mods;
+package com.webbrar.wurm.mods.bulktransportmod;
 
 import com.wurmonline.server.FailedException;
 import com.wurmonline.server.Items;
@@ -35,6 +35,7 @@ import javassist.CtClass;
 import javassist.NotFoundException;
 import javassist.CtPrimitiveType;
 import javassist.bytecode.Descriptor;
+import org.gotti.wurmunlimited.modloader.ReflectionUtil;
 /**
  *
  * @author Webba
@@ -156,67 +157,121 @@ public class BulkTransportMod implements WurmMod, Configurable{
                                                         question.getResponder().getCommunicator().sendNormalServerMessage("You may not carry that weight.");
                                                         return null;
                                                     }
-                                                    for (int created = 0; created < i; ++created) {
-                                                        try {
-                                                            int weight = bulkitem.getWeightGrams() - weightReduced;
-                                                            float percent = 1.0f;
-                                                            if (weight < volume) {
-                                                                percent = (float)weight / volume;
+                                                    if(targetInventory.isBulkContainer()){
+                                                        float toBulkInsert = 0;
+                                                        int maxAllowed = 0; 
+                                                        if(targetInventory.isCrate()){
+                                                            maxAllowed = targetInventory.getRemainingCrateSpace();
+                                                            toBulkInsert = Math.min(maxAllowed, i);
+                                                        }
+                                                        else
+                                                        {
+                                                            int usedVolume = 0;
+                                                            try{
+            
+                                                                Method m = ReflectionUtil.getMethod(Item.class, "getUsedVolume");
+                                                                Object f = ReflectionUtil.callPrivateMethod(targetInventory, m, new Object[]{});
+                                                                usedVolume = (int)f;
                                                             }
-                                                            else {
-                                                                weight = Math.min(bulkitem.getWeightGrams(), volume);
+                                                            catch(Exception ex){
                                                             }
-                                                            if (weight > 0) {
-                                                                toInsert = ItemFactory.createItem(bulkitem.getRealTemplateId(), bulkitem.getCurrentQualityLevel(), bulkitem.getMaterial(), (byte)0, question.getResponder().getName());
-                                                                toInsert.setLastOwnerId(question.getResponder().getWurmId());
-                                                                if (toInsert.isRepairable()) {
-                                                                    final byte newState = MethodsItems.getNewCreationState(toInsert.getMaterial());
-                                                                    toInsert.setCreationState(newState);
+                                                            float val = (targetInventory.getContainerVolume() - usedVolume)/ template.getVolume();
+                                                            toBulkInsert = Math.min(val, i);
+                                                        }
+                                                        toBulkInsert = Math.min(bulkitem.getBulkNumsFloat(false), toBulkInsert);
+                                                        toInsert = ItemFactory.createItem(bulkitem.getRealTemplateId(), bulkitem.getCurrentQualityLevel(), bulkitem.getMaterial(), (byte)0, question.getResponder().getName());
+                                                        toInsert.setLastOwnerId(question.getResponder().getWurmId());
+                                                        if (toInsert.isRepairable()) {
+                                                            final byte newState = MethodsItems.getNewCreationState(toInsert.getMaterial());
+                                                            toInsert.setCreationState(newState);
+                                                        }
+                                                        int insertWeight = (int)(toBulkInsert * template.getWeightGrams());
+                                                        toInsert.setWeight(insertWeight, true);
+                                                        Label_Create:{
+                                                            try {
+                                                                if ((targetInventory.isCrate() || !targetInventory.hasSpaceFor(toInsert.getVolume())) && (!targetInventory.isCrate() || !targetInventory.canAddToCrate(toInsert))) {
+                                                                    question.getResponder().getCommunicator().sendNormalServerMessage(String.format("The %s will not fit in the %s.", toInsert.getName(), targetInventory.getName()));
+                                                                    Items.destroyItem(toInsert.getWurmId());
+                                                                    break Label_Create;
                                                                 }
-                                                                toInsert.setWeight((int)(percent * template.getWeightGrams()), true);
-                                                                Label_0855: {
-                                                                    if (mTarg == 0L) {
-                                                                        question.getResponder().getInventory().insertItem(toInsert);
-                                                                    }
-                                                                    else {
-                                                                        if (targetInventory.isBulkContainer()) {
-                                                                            try {
-                                                                                if ((targetInventory.isCrate() || !targetInventory.hasSpaceFor(toInsert.getVolume())) && (!targetInventory.isCrate() || !targetInventory.canAddToCrate(toInsert))) {
-                                                                                    final String message2 = "The %s will not fit in the %s.";
-                                                                                    question.getResponder().getCommunicator().sendNormalServerMessage(String.format("The %s will not fit in the %s.", toInsert.getName(), targetInventory.getName()));
-                                                                                    Items.destroyItem(toInsert.getWurmId());
-                                                                                    break;
-                                                                                }
-                                                                                if (!toInsert.moveToItem(question.getResponder(), targetInventory.getWurmId(), false)) {
-                                                                                    Items.destroyItem(toInsert.getWurmId());
-                                                                                    break;
-                                                                                }
-                                                                                break Label_0855;
-                                                                            }
-                                                                            catch (NoSuchPlayerException ex2) {
-                                                                                break Label_0855;
-                                                                            }
-                                                                            catch (NoSuchCreatureException ex3) {
-                                                                                break Label_0855;
-                                                                            }
-                                                                        }
-                                                                        if (!targetInventory.testInsertItem(toInsert) || !targetInventory.mayCreatureInsertItem()) {
-                                                                            final String message2 = "There is not enough space for any more items.";
-                                                                            question.getResponder().getCommunicator().sendNormalServerMessage("There is not enough space for any more items.");
-                                                                            Items.destroyItem(toInsert.getWurmId());
-                                                                            break;
-                                                                        }
-                                                                        targetInventory.insertItem(toInsert);
-                                                                    }
+                                                                if (!toInsert.moveToItem(question.getResponder(), targetInventory.getWurmId(), false)) {
+                                                                    Items.destroyItem(toInsert.getWurmId());
+                                                                    break Label_Create;
                                                                 }
-                                                                weightReduced += weight;
+                                                                break Label_Create;
+                                                            }
+                                                            catch (NoSuchPlayerException ex2) {
+                                                                break Label_Create;
+                                                            }
+                                                            catch (NoSuchCreatureException ex3) {
+                                                                break Label_Create;
                                                             }
                                                         }
-                                                        catch (NoSuchTemplateException nst) {
-                                                            BulkTransportMod.getInstance().getLogger().log(Level.WARNING, nst.getMessage(), (Throwable)nst);
-                                                        }
-                                                        catch (FailedException fe) {
-                                                            BulkTransportMod.getInstance().getLogger().log(Level.WARNING, fe.getMessage(), (Throwable)fe);
+                                                        weightReduced = (int)(toBulkInsert * template.getVolume());
+                                                    }
+                                                    else{
+                                                        for (int created = 0; created < i; ++created) {
+                                                            try {
+                                                                int weight = bulkitem.getWeightGrams() - weightReduced;
+                                                                float percent = 1.0f;
+                                                                if (weight < volume) {
+                                                                    percent = (float)weight / volume;
+                                                                }
+                                                                else {
+                                                                    weight = Math.min(bulkitem.getWeightGrams(), volume);
+                                                                }
+                                                                if (weight > 0) {
+                                                                    toInsert = ItemFactory.createItem(bulkitem.getRealTemplateId(), bulkitem.getCurrentQualityLevel(), bulkitem.getMaterial(), (byte)0, question.getResponder().getName());
+                                                                    toInsert.setLastOwnerId(question.getResponder().getWurmId());
+                                                                    if (toInsert.isRepairable()) {
+                                                                        final byte newState = MethodsItems.getNewCreationState(toInsert.getMaterial());
+                                                                        toInsert.setCreationState(newState);
+                                                                    }
+                                                                    toInsert.setWeight((int)(percent * template.getWeightGrams()), true);
+                                                                    Label_0855: {
+                                                                        if (mTarg == 0L) {
+                                                                            question.getResponder().getInventory().insertItem(toInsert);
+                                                                        }
+                                                                        else {
+                                                                            if (targetInventory.isBulkContainer()) {
+                                                                                try {
+                                                                                    if ((targetInventory.isCrate() || !targetInventory.hasSpaceFor(toInsert.getVolume())) && (!targetInventory.isCrate() || !targetInventory.canAddToCrate(toInsert))) {
+                                                                                        final String message2 = "The %s will not fit in the %s.";
+                                                                                        question.getResponder().getCommunicator().sendNormalServerMessage(String.format("The %s will not fit in the %s.", toInsert.getName(), targetInventory.getName()));
+                                                                                        Items.destroyItem(toInsert.getWurmId());
+                                                                                        break;
+                                                                                    }
+                                                                                    if (!toInsert.moveToItem(question.getResponder(), targetInventory.getWurmId(), false)) {
+                                                                                        Items.destroyItem(toInsert.getWurmId());
+                                                                                        break;
+                                                                                    }
+                                                                                    break Label_0855;
+                                                                                }
+                                                                                catch (NoSuchPlayerException ex2) {
+                                                                                    break Label_0855;
+                                                                                }
+                                                                                catch (NoSuchCreatureException ex3) {
+                                                                                    break Label_0855;
+                                                                                }
+                                                                            }
+                                                                            if (!targetInventory.testInsertItem(toInsert) || !targetInventory.mayCreatureInsertItem()) {
+                                                                                final String message2 = "There is not enough space for any more items.";
+                                                                                question.getResponder().getCommunicator().sendNormalServerMessage("There is not enough space for any more items.");
+                                                                                Items.destroyItem(toInsert.getWurmId());
+                                                                                break;
+                                                                            }
+                                                                            targetInventory.insertItem(toInsert);
+                                                                        }
+                                                                    }
+                                                                    weightReduced += weight;
+                                                                }
+                                                            }
+                                                            catch (NoSuchTemplateException nst) {
+                                                                BulkTransportMod.getInstance().getLogger().log(Level.WARNING, nst.getMessage(), (Throwable)nst);
+                                                            }
+                                                            catch (FailedException fe) {
+                                                                BulkTransportMod.getInstance().getLogger().log(Level.WARNING, fe.getMessage(), (Throwable)fe);
+                                                            }
                                                         }
                                                     }
                                                     question.getResponder().achievement(167, -i);

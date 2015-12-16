@@ -59,6 +59,22 @@ public class BulkTransportMod implements WurmMod, Configurable{
         return this.logger;
     }
     
+    public static long getRootInventory(long id){
+        try{
+            Item item = Items.getItem(id);
+            Item parent = item.getParentOrNull();
+            long parentid = -10L;
+            while (parent != null){
+                parentid = parent.getWurmId();
+                parent = parent.getParentOrNull();
+            }
+            return parentid;
+        }
+        catch(NoSuchItemException nsi){
+            return -10L;
+        }
+    }
+    
     
     @Override
     public void configure(Properties properties) {
@@ -121,6 +137,7 @@ public class BulkTransportMod implements WurmMod, Configurable{
                                                 moveTarget.setAccessible(true);
                                                 final long mTarg = (long)moveTarget.get(question);
                                                 moveTarget.setAccessible(false);     
+                                                long rootParentId = BulkTransportMod.getRootInventory(mTarg);
                                                 try {
                                                     if (mTarg != 0L) {
                                                         targetInventory = Items.getItem(mTarg);
@@ -131,11 +148,12 @@ public class BulkTransportMod implements WurmMod, Configurable{
                                                     BulkTransportMod.getInstance().getLogger().log(Level.WARNING, message, (Throwable)nsi);
                                                     return null;
                                                 }
-                                                if ((i > maxCapac) && (mTarg == 0L || mTarg == question.getResponder().getInventory().getWurmId())) {
+                                                
+                                                if ((i > maxCapac) && (mTarg == 0L || mTarg == question.getResponder().getInventory().getWurmId() || rootParentId == question.getResponder().getInventory().getWurmId())) {
                                                     i = Math.min(bnums, maxCapac);
                                                 }
                                                 
-                                                if (bnums < i && i != 1000) {
+                                                if (bnums < i && !max) {
                                                     question.getResponder().getCommunicator().sendNormalServerMessage("The " + bulkitem.getName() + " does not contain " + i + " items. Moving " + bnums + " instead.");
                                                     i = Math.min(bnums, i);
                                                 }
@@ -143,17 +161,17 @@ public class BulkTransportMod implements WurmMod, Configurable{
                                                 final ItemTemplate template = bulkitem.getRealTemplate();
                                                 if (template != null){
                                                     final int volume = template.getVolume();
-                                                    if (max && (mTarg == 0L || mTarg == question.getResponder().getInventory().getWurmId())) {
-                                                        if(!targetInventory.isBulkContainer()){
-                                                            i = Math.min(maxCapac, question.getResponder().getCarryCapacityFor(template.getWeightGrams()));
-                                                        }
+                                                    if (max && (mTarg == 0L || mTarg == question.getResponder().getInventory().getWurmId() || rootParentId == question.getResponder().getInventory().getWurmId())) {
+                                                        i = Math.min(maxCapac, question.getResponder().getCarryCapacityFor(template.getWeightGrams()));
                                                         if (i <= 0) {
                                                             question.getResponder().getCommunicator().sendNormalServerMessage("You can not even carry one of those.");
                                                             return null;
                                                         }
                                                         i = Math.min(i, bnums);
                                                     }
-                                                    else if (!question.getResponder().canCarry(template.getWeightGrams() * i) && (i > 1 || bulkitem.getWeightGrams() >= volume) && (mTarg == 0L || mTarg == question.getResponder().getInventory().getWurmId())) {
+                                                    else if (!question.getResponder().canCarry(template.getWeightGrams() * i) && (i > 1 || bulkitem.getWeightGrams() >= volume) && (mTarg == 0L 
+                                                                || mTarg == question.getResponder().getInventory().getWurmId() 
+                                                                || rootParentId == question.getResponder().getInventory().getWurmId())) {
                                                         question.getResponder().getCommunicator().sendNormalServerMessage("You may not carry that weight.");
                                                         return null;
                                                     }
@@ -233,29 +251,7 @@ public class BulkTransportMod implements WurmMod, Configurable{
                                                                             question.getResponder().getInventory().insertItem(toInsert);
                                                                         }
                                                                         else {
-                                                                            if (targetInventory.isBulkContainer()) {
-                                                                                try {
-                                                                                    if ((targetInventory.isCrate() || !targetInventory.hasSpaceFor(toInsert.getVolume())) && (!targetInventory.isCrate() || !targetInventory.canAddToCrate(toInsert))) {
-                                                                                        final String message2 = "The %s will not fit in the %s.";
-                                                                                        question.getResponder().getCommunicator().sendNormalServerMessage(String.format("The %s will not fit in the %s.", toInsert.getName(), targetInventory.getName()));
-                                                                                        Items.destroyItem(toInsert.getWurmId());
-                                                                                        break;
-                                                                                    }
-                                                                                    if (!toInsert.moveToItem(question.getResponder(), targetInventory.getWurmId(), false)) {
-                                                                                        Items.destroyItem(toInsert.getWurmId());
-                                                                                        break;
-                                                                                    }
-                                                                                    break Label_0855;
-                                                                                }
-                                                                                catch (NoSuchPlayerException ex2) {
-                                                                                    break Label_0855;
-                                                                                }
-                                                                                catch (NoSuchCreatureException ex3) {
-                                                                                    break Label_0855;
-                                                                                }
-                                                                            }
                                                                             if (!targetInventory.testInsertItem(toInsert) || !targetInventory.mayCreatureInsertItem()) {
-                                                                                final String message2 = "There is not enough space for any more items.";
                                                                                 question.getResponder().getCommunicator().sendNormalServerMessage("There is not enough space for any more items.");
                                                                                 Items.destroyItem(toInsert.getWurmId());
                                                                                 break;

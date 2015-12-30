@@ -197,6 +197,10 @@ public class BulkTransportMod implements WurmMod, Configurable{
                                                             toBulkInsert = Math.min(val, i);
                                                         }
                                                         toBulkInsert = Math.min(bulkitem.getBulkNumsFloat(false), toBulkInsert);
+                                                        if(toBulkInsert == 0.0f){
+                                                            question.getResponder().getCommunicator().sendNormalServerMessage("Cannot move 0 items");
+                                                            return null;
+                                                        }
                                                         toInsert = ItemFactory.createItem(bulkitem.getRealTemplateId(), bulkitem.getCurrentQualityLevel(), bulkitem.getMaterial(), (byte)0, question.getResponder().getName());
                                                         toInsert.setLastOwnerId(question.getResponder().getWurmId());
                                                         if (toInsert.isRepairable()) {
@@ -205,6 +209,10 @@ public class BulkTransportMod implements WurmMod, Configurable{
                                                         }
                                                         int insertWeight = (int)(toBulkInsert * template.getWeightGrams());
                                                         toInsert.setWeight(insertWeight, true);
+                                                        if (!targetInventory.testInsertItem(toInsert) || !targetInventory.mayCreatureInsertItem()) {
+                                                            question.getResponder().getCommunicator().sendNormalServerMessage("You do not have permissions for this.");
+                                                            return null;
+                                                        }
                                                         Label_Create:{
                                                             try {
                                                                 if ((targetInventory.isCrate() || !targetInventory.hasSpaceFor(toInsert.getVolume())) && (!targetInventory.isCrate() || !targetInventory.canAddToCrate(toInsert))) {
@@ -216,7 +224,6 @@ public class BulkTransportMod implements WurmMod, Configurable{
                                                                     Items.destroyItem(toInsert.getWurmId());
                                                                     break Label_Create;
                                                                 }
-                                                                break Label_Create;
                                                             }
                                                             catch (NoSuchPlayerException ex2) {
                                                                 break Label_Create;
@@ -224,8 +231,8 @@ public class BulkTransportMod implements WurmMod, Configurable{
                                                             catch (NoSuchCreatureException ex3) {
                                                                 break Label_Create;
                                                             }
+                                                            weightReduced = (int)(toBulkInsert * template.getVolume());
                                                         }
-                                                        weightReduced = (int)(toBulkInsert * template.getVolume());
                                                     }
                                                     else{
                                                         for (int created = 0; created < i; ++created) {

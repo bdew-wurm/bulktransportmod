@@ -209,10 +209,6 @@ public class BulkTransportMod implements WurmMod, Configurable{
                                                         }
                                                         int insertWeight = (int)(toBulkInsert * template.getWeightGrams());
                                                         toInsert.setWeight(insertWeight, true);
-                                                        if (!targetInventory.testInsertItem(toInsert) || !targetInventory.mayCreatureInsertItem()) {
-                                                            question.getResponder().getCommunicator().sendNormalServerMessage("You do not have permissions for this.");
-                                                            return null;
-                                                        }
                                                         Label_Create:{
                                                             try {
                                                                 if ((targetInventory.isCrate() || !targetInventory.hasSpaceFor(toInsert.getVolume())) && (!targetInventory.isCrate() || !targetInventory.canAddToCrate(toInsert))) {

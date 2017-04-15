@@ -7,14 +7,11 @@ package com.webbrar.wurm.mods.bulktransportmod;
 
 import com.wurmonline.server.FailedException;
 import com.wurmonline.server.Items;
-import com.wurmonline.server.items.Item;
+import com.wurmonline.server.items.*;
 import com.wurmonline.server.NoSuchItemException;
 import com.wurmonline.server.NoSuchPlayerException;
 import com.wurmonline.server.behaviours.MethodsItems;
 import com.wurmonline.server.creatures.NoSuchCreatureException;
-import com.wurmonline.server.items.ItemFactory;
-import com.wurmonline.server.items.ItemTemplate;
-import com.wurmonline.server.items.NoSuchTemplateException;
 import com.wurmonline.server.questions.RemoveItemQuestion;
 
 import java.lang.reflect.InvocationHandler;
@@ -175,6 +172,13 @@ public class BulkTransportMod implements WurmMod, Configurable{
                                                         question.getResponder().getCommunicator().sendNormalServerMessage("You may not carry that weight.");
                                                         return null;
                                                     }
+                                                    final byte auxdata = bulkitem.getAuxData();
+                                                    int toMake = bulkitem.getRealTemplateId();
+                                                    String aName = bulkitem.getActualName();
+                                                    if (toMake == 129 && auxdata == 0) {
+                                                        toMake = 92;
+                                                        aName = "meat";
+                                                    }
                                                     if(targetInventory.isBulkContainer()){
                                                         float toBulkInsert = 0;
                                                         int maxAllowed = 0; 
@@ -201,14 +205,31 @@ public class BulkTransportMod implements WurmMod, Configurable{
                                                             question.getResponder().getCommunicator().sendNormalServerMessage("Cannot move 0 items");
                                                             return null;
                                                         }
-                                                        toInsert = ItemFactory.createItem(bulkitem.getRealTemplateId(), bulkitem.getCurrentQualityLevel(), bulkitem.getMaterial(), (byte)0, question.getResponder().getName());
+                                                        toInsert = ItemFactory.createItem(toMake, bulkitem.getCurrentQualityLevel(), bulkitem.getMaterial(), (byte)0, question.getResponder().getName());
                                                         toInsert.setLastOwnerId(question.getResponder().getWurmId());
                                                         if (toInsert.isRepairable()) {
-                                                            final byte newState = MethodsItems.getNewCreationState(toInsert.getMaterial());
-                                                            toInsert.setCreationState(newState);
+                                                            toInsert.setCreationState((byte)0);
                                                         }
-                                                        int insertWeight = (int)(toBulkInsert * template.getWeightGrams());
-                                                        toInsert.setWeight(insertWeight, true);
+                                                        if (toInsert.usesFoodState()) {
+                                                            toInsert.setAuxData(auxdata);
+                                                            final ItemMealData imd = ItemMealData.getItemMealData(bulkitem.getWurmId());
+                                                            if (imd != null) {
+                                                                ItemMealData.save(toInsert.getWurmId(), imd.getRecipeId(), imd.getCalories(), imd.getCarbs(), imd.getFats(), imd.getProteins(), imd.getBonus(), imd.getStages(), imd.getIngredients());
+                                                            }
+                                                        }
+                                                        if (template.isFish()) {
+                                                            int tweight = (int) (toBulkInsert * template.getWeightGrams() * bulkitem.getCurrentQualityLevel() / 100.0f);
+                                                            toInsert.setSizes(tweight);
+                                                            toInsert.setWeight(tweight, true);
+                                                        } else {
+                                                            toInsert.setWeight((int)(toBulkInsert * template.getWeightGrams()), true);
+                                                        }
+                                                        if (bulkitem.getData1() != -1) {
+                                                            toInsert.setRealTemplate(bulkitem.getData1());
+                                                        }
+                                                        if (!bulkitem.getActualName().equalsIgnoreCase("bulk item")) {
+                                                            toInsert.setName(aName);
+                                                        }
                                                         Label_Create:{
                                                             try {
                                                                 if ((targetInventory.isCrate() || !targetInventory.hasSpaceFor(toInsert.getVolume())) && (!targetInventory.isCrate() || !targetInventory.canAddToCrate(toInsert))) {
@@ -242,13 +263,31 @@ public class BulkTransportMod implements WurmMod, Configurable{
                                                                     weight = Math.min(bulkitem.getWeightGrams(), volume);
                                                                 }
                                                                 if (weight > 0) {
-                                                                    toInsert = ItemFactory.createItem(bulkitem.getRealTemplateId(), bulkitem.getCurrentQualityLevel(), bulkitem.getMaterial(), (byte)0, question.getResponder().getName());
+                                                                    toInsert = ItemFactory.createItem(toMake, bulkitem.getCurrentQualityLevel(), bulkitem.getMaterial(), (byte)0, question.getResponder().getName());
                                                                     toInsert.setLastOwnerId(question.getResponder().getWurmId());
                                                                     if (toInsert.isRepairable()) {
-                                                                        final byte newState = MethodsItems.getNewCreationState(toInsert.getMaterial());
-                                                                        toInsert.setCreationState(newState);
+                                                                        toInsert.setCreationState((byte)0);
                                                                     }
-                                                                    toInsert.setWeight((int)(percent * template.getWeightGrams()), true);
+                                                                    if (toInsert.usesFoodState()) {
+                                                                        toInsert.setAuxData(auxdata);
+                                                                        final ItemMealData imd = ItemMealData.getItemMealData(bulkitem.getWurmId());
+                                                                        if (imd != null) {
+                                                                            ItemMealData.save(toInsert.getWurmId(), imd.getRecipeId(), imd.getCalories(), imd.getCarbs(), imd.getFats(), imd.getProteins(), imd.getBonus(), imd.getStages(), imd.getIngredients());
+                                                                        }
+                                                                    }
+                                                                    if (template.isFish()) {
+                                                                        int tweight = (int) (template.getWeightGrams() * bulkitem.getCurrentQualityLevel() / 100.0f);
+                                                                        toInsert.setSizes(tweight);
+                                                                        toInsert.setWeight(tweight, true);
+                                                                    } else {
+                                                                        toInsert.setWeight((int)(percent * template.getWeightGrams()), true);
+                                                                    }
+                                                                    if (bulkitem.getData1() != -1) {
+                                                                        toInsert.setRealTemplate(bulkitem.getData1());
+                                                                    }
+                                                                    if (!bulkitem.getActualName().equalsIgnoreCase("bulk item")) {
+                                                                        toInsert.setName(aName);
+                                                                    }
                                                                     Label_0855: {
                                                                         if (mTarg == 0L) {
                                                                             question.getResponder().getInventory().insertItem(toInsert);
